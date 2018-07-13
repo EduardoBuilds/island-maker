@@ -1,0 +1,157 @@
+<html>
+	<head>
+		<title>Island Maker</title>
+		<style>
+			canvas{
+				border:1px solid #333;
+			}
+		</style>
+	</head>
+	<body>
+		<canvas width="900" height="650" id="theCanvas"></canvas>
+
+		<button onClick="runTurn()">Run Turn</button>
+		<button onClick="restartGrid()">Restart Grid</button>
+		<script type="text/javascript">
+
+			//Obtain the canvas element
+			var canvas = document.getElementById('theCanvas');
+			var context = canvas.getContext('2d');
+
+			//Constants and definitions
+			var tileWidth = 10;
+			var tileHeight = 10;
+			var livingCellColor = '#6CBF71';
+			var deadCellColor = '#2D93AD';
+			
+			//Initialize grid
+			var grid = []
+
+			for (let i = 0; i < canvas.height/tileHeight; i++){
+				grid.push([])
+				for (let j = 0; j < canvas.width/tileWidth; j++){
+					if (i===0){
+						grid[i].push(0)
+					} else if (i===(canvas.height/tileHeight) - 1){
+						grid[i].push(0)
+					} else if(j===0) {
+						grid[i].push(0)
+					} else if (j===(canvas.width/tileWidth) - 1){
+						grid[i].push(0)
+					} else {
+						//Adding some randomness to the starting config
+						if ((Math.random()*4) > 1){
+							grid[i].push(0)
+						} else {
+							grid[i].push(1)
+						}
+					}
+				}
+			}
+
+			context.translate(0.5,0.5) //This prevents lines from looking blurry
+
+			//Basic canvas functions
+			function clearCanvas(){
+				context.clearRect(0,0,canvas.width,canvas.height);
+				context.fillStyle=deadCellColor;
+				context.rect(0,0,canvas.width,canvas.height);
+				context.fill();
+			}
+
+			function buildGrid(){
+				context.strokeStyle='#ffffff';
+				for (let x = 0; x < grid[0].length; x++){
+					context.moveTo(x*tileWidth,0);
+					context.lineTo(x*tileWidth,canvas.height);
+				}
+				for (let y = 0; y < grid.length; y++){
+					context.moveTo(0,y*tileHeight);
+					context.lineTo(canvas.width,y*tileHeight);
+				}
+				context.stroke();
+			}
+
+			function paintGrid(){
+				//We go row by row
+				for (let y = 0;  y < grid.length; y++){
+					for (let x = 0; x < grid[0].length; x++){
+						if (grid[y][x]){
+							context.fillStyle = livingCellColor
+						} else {
+							context.fillStyle = deadCellColor
+						}
+						context.fillRect(
+								x*tileWidth,y*tileHeight,
+								tileWidth,tileHeight
+							)
+					}
+				}
+				//When we're done, we just call the build grid 
+				//function to actually perform the drawing
+				buildGrid()
+			}	
+
+			function runTurn(){
+				//Clone the grid array to produce the output
+				let newGrid = grid.slice()
+				for (let y = 1; y < grid.length-1;y++){
+					for(let x = 1; x < grid[0].length-1; x++){
+						let livingNeighbours = 0
+						//Top Row
+						livingNeighbours += grid[y-1][x-1] + grid[y-1][x] + grid[y-1][x+1]
+						//Mid Row
+						livingNeighbours += grid[y][x-1] + grid[y][x+1]
+						//BottomRow
+						livingNeighbours += grid[y+1][x-1] + grid[y+1][x] + grid[y+1][x+1]
+						if (grid[y][x]){
+							if (livingNeighbours < 2){
+								newGrid[y][x] = 0
+							}
+						} else {
+							if (livingNeighbours > 3){
+								newGrid[y][x] = 1
+							}
+						}
+					}
+				}
+				//Replace the old grid with the new grid
+				grid = newGrid.slice()
+				paintGrid()
+			}
+
+			function restartGrid(){
+				clearCanvas()
+				grid = []
+
+				for (let i = 0; i < canvas.height/tileHeight; i++){
+					grid.push([])
+					for (let j = 0; j < canvas.width/tileWidth; j++){
+						if (i===0){
+							grid[i].push(0)
+						} else if (i===(canvas.height/tileHeight) - 1){
+							grid[i].push(0)
+						} else if(j===0) {
+							grid[i].push(0)
+						} else if (j===(canvas.width/tileWidth) - 1){
+							grid[i].push(0)
+						} else {
+							//Adding some randomness to the starting config
+							if ((Math.random()*4) > 1){
+								grid[i].push(0)
+							} else {
+								grid[i].push(1)
+							}
+						}
+					}
+				}
+				paintGrid()
+			}
+
+
+			paintGrid()
+
+
+		</script>
+	</body>
+</html>
