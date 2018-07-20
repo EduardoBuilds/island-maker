@@ -13,11 +13,9 @@
 		<button onClick="runTurn()">Run Turn</button>
 		<button onClick="restartGrid()">Restart Grid</button>
 		<script type="text/javascript">
-
 			//Obtain the canvas element
 			var canvas = document.getElementById('theCanvas');
 			var context = canvas.getContext('2d');
-
 			//Constants and definitions
 			var tileWidth = 10;
 			var tileHeight = 10;
@@ -26,7 +24,6 @@
 			
 			//Initialize grid
 			var grid = []
-
 			for (let i = 0; i < canvas.height/tileHeight; i++){
 				grid.push([])
 				for (let j = 0; j < canvas.width/tileWidth; j++){
@@ -48,9 +45,7 @@
 					}
 				}
 			}
-
 			context.translate(0.5,0.5) //This prevents lines from looking blurry
-
 			//Basic canvas functions
 			function clearCanvas(){
 				context.clearRect(0,0,canvas.width,canvas.height);
@@ -58,7 +53,6 @@
 				context.rect(0,0,canvas.width,canvas.height);
 				context.fill();
 			}
-
 			function buildGrid(){
 				context.strokeStyle='#ffffff';
 				for (let x = 0; x < grid[0].length; x++){
@@ -71,7 +65,6 @@
 				}
 				context.stroke();
 			}
-
 			function paintGrid(){
 				//We go row by row
 				for (let y = 0;  y < grid.length; y++){
@@ -91,7 +84,6 @@
 				//function to actually perform the drawing
 				buildGrid()
 			}	
-
 			function runTurn(){
 				//Clone the grid array to produce the output
 				let newGrid = grid.slice()
@@ -119,11 +111,9 @@
 				grid = newGrid.slice()
 				paintGrid()
 			}
-
 			function restartGrid(){
 				clearCanvas()
 				grid = []
-
 				for (let i = 0; i < canvas.height/tileHeight; i++){
 					grid.push([])
 					for (let j = 0; j < canvas.width/tileWidth; j++){
@@ -147,11 +137,7 @@
 				}
 				paintGrid()
 			}
-
-
 			paintGrid()
-
-
 		</script>
 	</body>
 </html>

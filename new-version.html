@@ -1,0 +1,290 @@
+<html>
+	<head>
+		<title>Island Maker</title>
+		<style>
+			canvas{
+				border:1px solid #333;
+				float:left;
+				margin-right:10px;
+			}
+			.controls{
+				float:left;
+
+			}
+
+			.buttons button{
+				padding:10px;
+				border-radius:2px;
+			}
+			
+			button:active:focus,button:active,button:focus{
+				outline:none;
+			}
+			button:disabled{
+				background:#444;
+			}
+
+			.input-group{
+				padding-bottom:10px;
+			}
+			.input-group label{
+				display:block;
+			}
+			.input-group select {
+				width:100%;
+				-webkit-appearance:none;
+				padding:5px;
+				background:#fff;
+				border:1px solid #000;
+				border-radius:0px;
+			}
+			.input-group input{
+				width:100%;
+				padding:5px;
+				background:#fff;
+				border:1px solid #000;
+				border-radius:0px;
+			}
+			.input-group .checkbox{
+				font-size: 20px;
+			}
+		</style>
+	</head>
+	<body>
+		<canvas width="900" height="650" id="theCanvas"></canvas>
+		<div class="controls">
+			<div class="buttons">
+				<div class="actualButtons">
+					<button onClick="runTurn()">Run Turn</button>
+					<button onClick="restartGrid()">Restart Grid</button>
+					<button onClick="beginAnimation()" id="animate">Begin running</button>
+					<button onClick="killAnimation()" id="stop" disabled>Stop</button>
+				</div>
+				<div>
+					<p id='currentGen-info'>Current Generation: <span id="gen-val">0</span></p>
+				</div>
+				<div>
+					<div class="input-group">
+						<label>Dimensions (in pixels)</label>
+						<select id="dimension-select">
+							<option>10</option>
+							<option>5</option>
+						</select>
+					</div>
+					<div class="input-group">
+						<label for="">Initial Spawn Threshold Probability</label>
+						<input type="text" id="spawn-threshold" value="0.25">
+					</div>
+					<div class="input-group">
+						<label for="">Loneliness Limit</label>
+						<input type="text" id="neighbor-death" value="1">
+					</div>
+					<div class="input-group">
+						<label for="">Reproduction Requirement</label>
+						<input type="text" id="neighbor-birth" value="3">
+					</div>
+					<div class="input-group">
+						<label for="">
+							Display Grid
+							<input class="checkbox" type="checkbox" id="grid-display">
+						</label>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script type="text/javascript">
+
+			//Obtain the canvas element
+			var canvas = document.getElementById('theCanvas');
+			var context = canvas.getContext('2d');
+			var timer = {};
+			var currentGen = 0;
+
+			//Constants and definitions
+			var tileWidth = 10;
+			var tileHeight = 10;
+			var spawnThreshold = 0.25;
+			var neighborBirth = 3;
+			var neighborDeath = 1;
+			var livingCellColor = '#6CBF71';
+			var deadCellColor = '#2D93AD';
+			
+			//Listeners
+			document.getElementById('dimension-select').addEventListener('change',function(e){
+				tileWidth = Number(e.target.value)
+				tileHeight = Number(e.target.value)
+			})
+			document.getElementById('spawn-threshold').addEventListener('change',function(e){
+				spawnThreshold = Number(e.target.value)
+			})
+			document.getElementById('neighbor-birth').addEventListener('change',function(e){
+				neighborBirth = Number(e.target.value)
+			})
+			document.getElementById('neighbor-death').addEventListener('change',function(e){
+				neighborDeath = Number(e.target.value)
+			})
+			document.getElementById('grid-display').addEventListener('click',function(e){
+				paintGrid()
+			})
+
+			//Initialize grid
+			var grid = []
+
+
+			for (let i = 0; i < canvas.height/tileHeight; i++){
+				grid.push([])
+				for (let j = 0; j < canvas.width/tileWidth; j++){
+					if (i===0){
+						grid[i].push(0)
+					} else if (i===(canvas.height/tileHeight) - 1){
+						grid[i].push(0)
+					} else if(j===0) {
+						grid[i].push(0)
+					} else if (j===(canvas.width/tileWidth) - 1){
+						grid[i].push(0)
+					} else {
+						//Adding some randomness to the starting config
+						if (Math.random() > spawnThreshold){
+							grid[i].push(0)
+						} else {
+							grid[i].push(1)
+						}
+					}
+				}
+			}
+
+			context.translate(0.5,0.5) //This prevents lines from looking blurry
+
+			//Basic canvas functions
+			function clearCanvas(){
+				context.clearRect(0,0,canvas.width,canvas.height);
+				context.fillStyle=deadCellColor;
+				context.rect(0,0,canvas.width,canvas.height);
+				context.fill();
+			}
+
+			function buildGrid(){
+				context.strokeStyle='#ffffff';
+				for (let x = 0; x < grid[0].length; x++){
+					context.moveTo(x*tileWidth,0);
+					context.lineTo(x*tileWidth,canvas.height);
+				}
+				for (let y = 0; y < grid.length; y++){
+					context.moveTo(0,y*tileHeight);
+					context.lineTo(canvas.width,y*tileHeight);
+				}
+				context.stroke();
+			}
+
+			function paintGrid(){
+				//We go row by row
+				for (let y = 0;  y < grid.length; y++){
+					for (let x = 0; x < grid[0].length; x++){
+						if (grid[y][x]){
+							context.fillStyle = livingCellColor
+						} else {
+							context.fillStyle = deadCellColor
+						}
+						context.fillRect(
+								x*tileWidth,y*tileHeight,
+								tileWidth,tileHeight
+							)
+					}
+				}
+				if (document.getElementById('grid-display').checked){
+					buildGrid()
+				}
+			}	
+
+			function runTurn(){
+				let newGrid = []
+				//This is how to properly slice the grid
+				newGrid.push(grid[0].slice(0))
+				for (let y = 1; y < grid.length-1;y++){
+					newGrid.push(grid[y].slice(0))
+					for(let x = 1; x < grid[0].length-1; x++){
+						let livingNeighbours = 0
+						//Top Row
+						livingNeighbours += grid[y-1][x-1] + grid[y-1][x] + grid[y-1][x+1]
+						//Mid Row
+						livingNeighbours += grid[y][x-1] + grid[y][x+1]
+						//BottomRow
+						livingNeighbours += grid[y+1][x-1] + grid[y+1][x] + grid[y+1][x+1]
+						if (grid[y][x]){
+							if (livingNeighbours <= neighborDeath){
+								newGrid[y][x] = 0
+							}
+						} else {
+							if (livingNeighbours > neighborBirth){
+								newGrid[y][x] = 1
+							}
+						}
+					}
+				}
+				//Last row
+				newGrid.push(grid[grid.length-1].slice(0))
+				//Paste the reference of the new grid onto the old one
+				grid = newGrid
+
+				//Update Generation Counter
+				currentGen++;
+				document.getElementById('gen-val').innerHTML = currentGen
+
+				//Paint the changes
+				paintGrid()
+			}
+
+
+			//Restart the grid from scratch
+			function restartGrid(){
+				clearCanvas()
+				currentGen = 0;
+				document.getElementById('gen-val').innerHTML = currentGen
+				grid = []
+
+				for (let i = 0; i < canvas.height/tileHeight; i++){
+					grid.push([])
+					for (let j = 0; j < canvas.width/tileWidth; j++){
+						if (i===0){
+							grid[i].push(0)
+						} else if (i===(canvas.height/tileHeight) - 1){
+							grid[i].push(0)
+						} else if(j===0) {
+							grid[i].push(0)
+						} else if (j===(canvas.width/tileWidth) - 1){
+							grid[i].push(0)
+						} else {
+							//Adding some randomness to the starting config
+							if (Math.random() > spawnThreshold){
+								grid[i].push(0)
+							} else {
+								grid[i].push(1)
+							}
+						}
+					}
+				}
+				paintGrid()
+			}
+
+			//Automatic Run functions
+			function beginAnimation(){
+				timer = setInterval(()=>{
+					runTurn()
+				},600)
+				document.getElementById('stop').disabled = false
+				document.getElementById('animate').disabled = true
+
+			}
+			function killAnimation(){
+				clearInterval(timer)
+				document.getElementById('stop').disabled = true
+				document.getElementById('animate').disabled = false
+			}
+
+			//Initial paint call
+			paintGrid()
+
+
+		</script>
+	</body>
+</html>
