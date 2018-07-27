@@ -12,7 +12,7 @@
 
 			}
 
-			.buttons button{
+			button{
 				padding:10px;
 				border-radius:2px;
 			}
@@ -73,7 +73,7 @@
 					</div>
 					<div class="input-group">
 						<label for="">Initial Spawn Threshold Probability</label>
-						<input type="text" id="spawn-threshold" value="0.25">
+						<input type="text" id="spawn-threshold" value="0.278">
 					</div>
 					<div class="input-group">
 						<label for="">Loneliness Limit</label>
@@ -90,6 +90,24 @@
 						</label>
 					</div>
 				</div>
+				<hr>
+				<div class="actualButtons">
+					<button onClick='determineHeightSeed()'>Determine Height Seed</button>
+					<button onClick='restartHeightMap()'>Restart Height Map</button>
+					<button onClick='makeHeightMap()'>Calculate Height Map</button>
+				</div>
+				<div>
+					<div class="input-group">
+						<label for="">X-Standard Deviation</label>
+						<input type="text" id="x-stdDev" value="">
+					</div>
+					<div class="input-group">
+						<label for="">Y-Standard Deviation</label>
+						<input type="text" id="y-stdDev" value="">
+					</div>
+				</div>
+				<div id="downloadLink">
+				</div>
 			</div>
 		</div>
 		<script type="text/javascript">
@@ -103,57 +121,88 @@
 			//Constants and definitions
 			var tileWidth = 10;
 			var tileHeight = 10;
-			var spawnThreshold = 0.25;
+			var spawnThreshold = 0.278;
 			var neighborBirth = 3;
 			var neighborDeath = 1;
 			var livingCellColor = '#6CBF71';
 			var deadCellColor = '#2D93AD';
+			var maxHeightColor= '#C19868';
+			var heightSeedDetermined = false;
+
+
+			//Gaussian Determinants
+			var gDet = {
+				x:{
+					mean:0,
+					stdDev: Math.floor((canvas.width / tileWidth) /12)
+				},
+				y:{
+					mean:0,
+					stdDev: Math.floor((canvas.height / tileHeight) /12)
+				}
+			}
+
 			
 			//Listeners
 			document.getElementById('dimension-select').addEventListener('change',function(e){
-				tileWidth = Number(e.target.value)
-				tileHeight = Number(e.target.value)
+				tileWidth = Number(e.target.value);
+				tileHeight = Number(e.target.value);
 			})
 			document.getElementById('spawn-threshold').addEventListener('change',function(e){
-				spawnThreshold = Number(e.target.value)
+				spawnThreshold = Number(e.target.value);
 			})
 			document.getElementById('neighbor-birth').addEventListener('change',function(e){
-				neighborBirth = Number(e.target.value)
+				neighborBirth = Number(e.target.value);
 			})
 			document.getElementById('neighbor-death').addEventListener('change',function(e){
-				neighborDeath = Number(e.target.value)
+				neighborDeath = Number(e.target.value);
 			})
 			document.getElementById('grid-display').addEventListener('click',function(e){
-				paintGrid()
+				paintGrid();
+			})
+			document.getElementById('y-stdDev').addEventListener('change',function(e){
+				gDet.y.stdDev = Number(e.target.value);
+			})
+			document.getElementById('x-stdDev').addEventListener('change',function(e){
+				gDet.x.stdDev = Number(e.target.value);
 			})
 
 			//Initialize grid
 			var grid = []
-
+			var heightMap = [];
+			var colorMap = [];
 
 			for (let i = 0; i < canvas.height/tileHeight; i++){
-				grid.push([])
+				grid.push([]);
+				heightMap.push([]);
+				colorMap.push([])
 				for (let j = 0; j < canvas.width/tileWidth; j++){
 					if (i===0){
-						grid[i].push(0)
+						grid[i].push(0);
 					} else if (i===(canvas.height/tileHeight) - 1){
-						grid[i].push(0)
+						grid[i].push(0);
 					} else if(j===0) {
-						grid[i].push(0)
+						grid[i].push(0);
 					} else if (j===(canvas.width/tileWidth) - 1){
-						grid[i].push(0)
+						grid[i].push(0);
 					} else {
 						//Adding some randomness to the starting config
 						if (Math.random() > spawnThreshold){
-							grid[i].push(0)
+							grid[i].push(0);
 						} else {
-							grid[i].push(1)
+							grid[i].push(1);
 						}
 					}
+					heightMap[i].push(0);
+					colorMap[i].push(deadCellColor)
 				}
 			}
 
-			context.translate(0.5,0.5) //This prevents lines from looking blurry
+			document.getElementById('y-stdDev').value = gDet.y.stdDev
+			document.getElementById('x-stdDev').value = gDet.x.stdDev
+
+
+			context.translate(0.5,0.5); //This prevents lines from looking blurry
 
 			//Basic canvas functions
 			function clearCanvas(){
@@ -181,108 +230,285 @@
 				for (let y = 0;  y < grid.length; y++){
 					for (let x = 0; x < grid[0].length; x++){
 						if (grid[y][x]){
-							context.fillStyle = livingCellColor
+							context.fillStyle = livingCellColor;
 						} else {
-							context.fillStyle = deadCellColor
+							context.fillStyle = deadCellColor;
 						}
 						context.fillRect(
 								x*tileWidth,y*tileHeight,
 								tileWidth,tileHeight
-							)
+							);
 					}
 				}
 				if (document.getElementById('grid-display').checked){
-					buildGrid()
+					buildGrid();
 				}
 			}	
 
 			function runTurn(){
-				let newGrid = []
+				let newGrid = [];
 				//This is how to properly slice the grid
-				newGrid.push(grid[0].slice(0))
+				newGrid.push(grid[0].slice(0));
 				for (let y = 1; y < grid.length-1;y++){
-					newGrid.push(grid[y].slice(0))
+					newGrid.push(grid[y].slice(0));
 					for(let x = 1; x < grid[0].length-1; x++){
-						let livingNeighbours = 0
+						let livingNeighbours = 0;
 						//Top Row
-						livingNeighbours += grid[y-1][x-1] + grid[y-1][x] + grid[y-1][x+1]
+						livingNeighbours += grid[y-1][x-1] + grid[y-1][x] + grid[y-1][x+1];
 						//Mid Row
-						livingNeighbours += grid[y][x-1] + grid[y][x+1]
+						livingNeighbours += grid[y][x-1] + grid[y][x+1];
 						//BottomRow
-						livingNeighbours += grid[y+1][x-1] + grid[y+1][x] + grid[y+1][x+1]
+						livingNeighbours += grid[y+1][x-1] + grid[y+1][x] + grid[y+1][x+1];
 						if (grid[y][x]){
 							if (livingNeighbours <= neighborDeath){
-								newGrid[y][x] = 0
+								newGrid[y][x] = 0;
 							}
 						} else {
 							if (livingNeighbours > neighborBirth){
-								newGrid[y][x] = 1
+								newGrid[y][x] = 1;
 							}
 						}
 					}
 				}
 				//Last row
-				newGrid.push(grid[grid.length-1].slice(0))
+				newGrid.push(grid[grid.length-1].slice(0));
 				//Paste the reference of the new grid onto the old one
-				grid = newGrid
+				grid = newGrid;
 
 				//Update Generation Counter
 				currentGen++;
-				document.getElementById('gen-val').innerHTML = currentGen
+				document.getElementById('gen-val').innerHTML = currentGen;
 
 				//Paint the changes
 				paintGrid()
 			}
 
+			function restartHeightMap(){
+				clearCanvas()
+				if(document.getElementById('clickToDownload') !== null){
+					let element = document.getElementById('clickToDownload');
+					console.log(element)
+					element.parentNode.removeChild(element)
+				}
+				heightMap = []
+				for (let i = 0; i < canvas.height/tileHeight; i++){
+					heightMap.push([]);
+					for (let j = 0; j < canvas.width/tileWidth; j++){
+						heightMap[i].push(0);
+					}
+				}
+				heightSeedDetermined = false;
+				paintGrid();
+			}
 
 			//Restart the grid from scratch
 			function restartGrid(){
-				clearCanvas()
+				clearCanvas();
 				currentGen = 0;
-				document.getElementById('gen-val').innerHTML = currentGen
-				grid = []
+				document.getElementById('gen-val').innerHTML = currentGen;
+				grid = [];
+				heightMap = [];
 
 				for (let i = 0; i < canvas.height/tileHeight; i++){
-					grid.push([])
+					grid.push([]);
+					heightMap.push([]);
 					for (let j = 0; j < canvas.width/tileWidth; j++){
 						if (i===0){
-							grid[i].push(0)
+							grid[i].push(0);
 						} else if (i===(canvas.height/tileHeight) - 1){
-							grid[i].push(0)
+							grid[i].push(0);
 						} else if(j===0) {
-							grid[i].push(0)
+							grid[i].push(0);
 						} else if (j===(canvas.width/tileWidth) - 1){
-							grid[i].push(0)
+							grid[i].push(0);
 						} else {
 							//Adding some randomness to the starting config
 							if (Math.random() > spawnThreshold){
-								grid[i].push(0)
+								grid[i].push(0);
 							} else {
-								grid[i].push(1)
+								grid[i].push(1);
 							}
+						}
+						heightMap[i].push(deadCellColor);
+					}
+				}
+				paintGrid();
+			}
+
+			//Height Seed Determination
+			function determineHeightSeed(){
+				//Syntactic Sugar
+				let maxY = Math.ceil(grid.length*0.75);
+				let minY = Math.ceil(grid.length*0.25);
+				let maxX = Math.ceil(grid[0].length*0.75);
+				let minX = Math.ceil(grid[0].length*0.25);
+
+
+				let validLocation = false
+				context.fillStyle=maxHeightColor;
+
+				while (!validLocation){
+					let locY = Math.floor( minY + (Math.random() * (maxY - minY) + 1) )
+					let locX = Math.floor( minX + (Math.random() * (maxX - minX) + 1) )
+					gDet.x.mean = locX;
+					gDet.y.mean = locY;
+					if (grid[locY][locX]){
+						validLocation = true;
+						context.fillRect(
+										locX*tileWidth,locY*tileHeight,
+										tileWidth,tileHeight
+									);
+					}
+				}
+				heightSeedDetermined = true
+				return false
+			}
+
+
+			//Math Functions
+
+			function calcNormDistVal(direction,position){
+				//Syntactic sugar
+				let mean = gDet[direction].mean
+				let stdDev = gDet[direction].stdDev
+
+				//Function components
+				let coefficient = 1 / ( Math.sqrt( 2*Math.PI*(stdDev*stdDev) ) )
+				let power = -1 * ( Math.pow(position-mean,2) / (2*(stdDev*stdDev)) )
+
+				//Calculation
+				let score = coefficient*Math.pow(Math.E,power) 
+				return score
+			}
+
+			function normalize(max,min,val){
+				return (val-min) / (max-min)
+			}
+
+			function interpolate(max,min,val){
+				return Math.floor((max-min)*val+min);
+			}
+
+			function makeHeightMap(){
+				if (!heightSeedDetermined){
+					alert('No height seed has been determined')
+					return false;
+				}
+
+				var min = 1000000000;
+				var max = -10000000000;
+				for (let y = 1; y < grid.length-1; y++){
+					for (let x = 1; x < grid[0].length -1; x++){
+						if (grid[y][x] == 1){
+							let val = calcNormDistVal('x',x)*calcNormDistVal('y',y);
+							if (val > max){
+								max = val
+							}
+							if (val < min){
+								min = val
+							}
+							heightMap[y][x] = val
 						}
 					}
 				}
-				paintGrid()
+
+				for (let y = 1; y < grid.length-1; y++){
+					for (let x = 1; x < grid[0].length -1; x++){
+						if (grid[y][x] == 1){
+							//Normalize
+							normalizedValue = normalize(max,min,heightMap[y][x])
+							heightMap[y][x] = normalizedValue
+
+							//R
+							//Get Range
+							let rMax = parseInt(maxHeightColor.slice(1,3),16);
+							let rMin = parseInt(livingCellColor.slice(1,3),16);
+							//Interpolate and convert to hexadecimal
+							let R = interpolate(rMax,rMin,normalizedValue).toString(16);
+
+							//G
+							//Get Range
+							let gMax = parseInt(maxHeightColor.slice(3,5),16);
+							let gMin = parseInt(livingCellColor.slice(3,5),16);
+							//Interpolate and convert to hexadecimal
+							let G = interpolate(gMax,gMin,normalizedValue).toString(16);
+
+							//B
+							//Get Range
+							let bMax = parseInt(maxHeightColor.slice(5,7),16);
+							let bMin = parseInt(livingCellColor.slice(5,7),16);
+							//Interpolate and convert to hexadecimal
+							let B = interpolate(bMax,bMin,normalizedValue).toString(16);
+
+							//Mix everything together for the output color
+							colorMap[y][x] = '#'+R+G+B
+						} else {
+							//If it ain't living it's water
+							colorMap[y][x] = deadCellColor
+						}
+					}
+				}
+
+				paintHeightMap();
+				exportHeightMap();
+			}
+
+			function paintHeightMap(){
+				//We go row by row
+				for (let y = 0;  y < colorMap.length; y++){
+					for (let x = 0; x < colorMap[0].length; x++){
+						context.fillStyle = colorMap[y][x]
+						context.fillRect(
+								x*tileWidth,y*tileHeight,
+								tileWidth,tileHeight
+							);
+					}
+				}
+				if (document.getElementById('grid-display').checked){
+					buildGrid();
+				}
+			}
+
+			function exportHeightMap(){
+				if(document.getElementById('clickToDownload') !== null){
+					let element = document.getElementById('clickToDownload');
+					element.parentNode.removeChild(element)
+				}
+				let csvData = 'data:text/csv;charset=utf-8,';
+				for (let y = 0; y < heightMap.length; y++){
+					for (let x = 0; x < heightMap[y].length; x++){
+						csvData += x.toString()+','+y.toString()+','+heightMap[y][x].toString() + '\n';
+					}
+				}
+				let encodedURI = encodeURI(csvData);
+				let linkDiv = document.getElementById('downloadLink');
+				let link = document.createElement('a');
+				link.id = 'clickToDownload';
+				link.setAttribute('href',encodedURI);
+				link.setAttribute('download','heightMapData.csv');
+				link.innerHTML = 'Click to download the height map data';
+				linkDiv.appendChild(link)
 			}
 
 			//Automatic Run functions
 			function beginAnimation(){
 				timer = setInterval(()=>{
 					runTurn()
-				},600)
-				document.getElementById('stop').disabled = false
-				document.getElementById('animate').disabled = true
+				},600);
+				document.getElementById('stop').disabled = false;
+				document.getElementById('animate').disabled = true;
 
 			}
 			function killAnimation(){
-				clearInterval(timer)
-				document.getElementById('stop').disabled = true
-				document.getElementById('animate').disabled = false
+				clearInterval(timer);
+				document.getElementById('stop').disabled = true;
+				document.getElementById('animate').disabled = false;
 			}
 
 			//Initial paint call
-			paintGrid()
+			for (let i = 0; i < 15; i++){
+				runTurn()
+			}
 
 
 		</script>
